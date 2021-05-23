@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Install Dependecies
+        run: sudo apt install -y build-essential clang-11 libelf-dev zlib1g-dev libbfd-dev libcap-dev
+
+      - name: Fix llvm-strip
+        run: sudo ln -s "$(which llvm-strip-11)" "$(dirname $(which llvm-strip-11))/llvm-strip"
+
+      - name: Build
+        run: cd src && make
