@@ -8,6 +8,10 @@ this is interesting: https://blog.tofile.dev/2021/....
 
 
 # Build
+To use pre-build binaries, grab them from the [Releases](https://github.com/pathtofile/bad-bpf/releases) page.
+
+To build from source, do the following:
+
 ## Dependecies
 As this code makes use of CO-RE, it requires a recent version of Linux that has BTF Type information.
 See [these notes in the libbpf README](https://github.com/libbpf/libbpf/tree/master#bpf-co-re-compile-once--run-everywhere)
@@ -26,8 +30,6 @@ sudo apt install build-essential clang-11 libelf-dev zlib1g-dev libbfd-dev libca
 ```
 
 ## Build
-To use pre-build binaries, grab them from the [Releases](https://github.com/pathtofile/bad-bpf/releases) page.
-
 To Build from source, recusivly clone the respository the run `make` in the `src` directory to build:
 ```bash
 git clone --recusrive https://github.com/pathtofile/bad-bpf.git
