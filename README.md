@@ -48,6 +48,15 @@ As well as `--help`, every program also has a `--target-ppid`/`-t`.
 This option restricts the programs' operation to only programs that are children
 of the process matching this PID. This demonstrates to how affect some programs, but not others.
 
+
+- [BPF-DOS](#BPF-Dos)
+- [Exec-Hijack](#Exec-Hijack)
+- [Pid-Hide](#Pid-Hide)
+- [Sudo-Add](#Sudo-Add)
+- [Text-Replace](#Text-Replace)
+    - [Kernel Module hiding](#Text-Replace)
+    - [MAC Address spoofer](#Text-Replace)
+
 ## BPF-Dos
 ```bash
 sudo ./bpfdos
