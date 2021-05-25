@@ -9,7 +9,8 @@ INCLUDES := -I$(OUTPUT)
 CFLAGS := -g -Wall
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
-APPS = bpfdos pidhide sudoadd textreplace
+APPS = bpfdos exechijack pidhide sudoadd textreplace
+HELPERS = hijackee
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs
 # to the includes list when compiling with `-target bpf` because otherwise some
@@ -35,13 +36,13 @@ else
 endif
 
 .PHONY: all
-all: $(APPS)
+all: $(APPS) $(HELPERS)
 
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
 	$(Q)rm -rf $(OUTPUT) $(APPS)
-	$(Q)cd bin && rm -f $(APPS)
+	$(Q)cd bin && rm -f $(APPS) $(HELPERS)
 
 $(OUTPUT) $(OUTPUT)/libbpf:
 	$(call msg,MKDIR,$@)
@@ -77,6 +78,11 @@ $(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
 $(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
 	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -o bin/$@
+
+# Build helpers
+$(HELPERS):
+	$(call msg,BINARY,$@)
+	$(Q)$(CC) $(CFLAGS) $@.c -o bin/$@
 
 # delete failed targets
 .DELETE_ON_ERROR:

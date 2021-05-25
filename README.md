@@ -55,6 +55,22 @@ sudo ./bpfdos
 This program raises a `SIG_KILL` signal to any program attempting to use the `bpf` syscall.
 
 
+## Exec-Hijack
+```bash
+sudo ./exechijack
+```
+This program intercepts all `execve` calls (used to create new processes) and instead makes then call
+`/a`. To run, first ensure there is a program in the root dir `/a` (probably best to make is executable by all).
+`bad-bpf` builds a simple program `hijackee` that simply prints out the `uid` and `argv[0]`, so you can use that:
+```bash
+make
+sudo cp ./bin/hijackee /a
+sudo chmod ugo+rx /a
+```
+
+Then just run `sudo ./bin/exechijack`.
+
+
 ## Pid-Hide
 ```
 sudo ./pidhide --pid-to-hide 2222

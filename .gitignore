@@ -1,6 +1,8 @@
 .vscode/
 src/.output
 src/bin/bpfdos
+src/bin/exechijack
+src/bin/hijackee
 src/bin/pidhide
 src/bin/sudoadd
 src/bin/textreplace
