@@ -2,10 +2,15 @@
 A collection of malicious eBPF programs that make use of eBPF's ability to
 read and write user data in between the usermode program and the kernel.
 
+- [Overview](#Overview)
+- [To Build](#Build)
+- [To Run](#Run)
+- [Availible Programs](#Programs)
+
+
 # Overview
 See my blog for an overview on how these programs work and why
 this is interesting: https://blog.tofile.dev/2021/....
-
 
 # Build
 To use pre-build binaries, grab them from the [Releases](https://github.com/pathtofile/bad-bpf/releases) page.
