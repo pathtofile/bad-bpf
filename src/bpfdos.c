@@ -17,9 +17,9 @@ const char argp_program_doc[] =
 "BPF DOS\n"
 "\n"
 "Sends a SIGKILL to any program attempting to use\n"
-"the bpf syscall (besides this one)\n"
+"the ptrace syscall (e.g. strace)\n"
 "\n"
-"USAGE: ./pidhide [-t 1111]\n";
+"USAGE: ./bpfdos [-t 1111]\n";
 
 static const struct argp_option opts[] = {
     { "target-ppid", 't', "PPID", 0, "Optional Parent PID, will only affect its children." },
@@ -54,9 +54,9 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
 {
     const struct event *e = data;
     if (e->success)
-        printf("Killed PID %d (%s) for trying to use bpf syscall\n", e->pid, e->comm);
+        printf("Killed PID %d (%s) for trying to use ptrace syscall\n", e->pid, e->comm);
     else
-        printf("Failed to kill PID %d (%s) for trying to use bpf syscall\n", e->pid, e->comm);
+        printf("Failed to kill PID %d (%s) for trying to use ptrace syscall\n", e->pid, e->comm);
     return 0;
 }
 
@@ -84,8 +84,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    // Let bpf program know our pid so we don't get kiled by it
-    skel->rodata->bpfdos_pid = getpid();
+    // Set target ppid
     skel->rodata->target_ppid = env.target_ppid;
 
     // Verify and load program

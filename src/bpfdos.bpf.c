@@ -16,18 +16,13 @@ struct {
 // Optional Target Parent PID
 const volatile int target_ppid = 0;
 
-// This PID of BPFDOS, so we don't kill ourselves
-const volatile int bpfdos_pid = 0;
-
-SEC("tp/syscalls/sys_enter_bpf")
+SEC("tp/syscalls/sys_enter_ptrace")
 int bpf_dos(struct trace_event_raw_sys_enter *ctx)
 {
-    // Check we don't stop bpfdos itself
+    long ret = 0;
     size_t pid_tgid = bpf_get_current_pid_tgid();
     int pid = pid_tgid >> 32;
-    if (pid == bpfdos_pid) {
-        return 0;
-    }
+
     // if target_ppid is 0 then we target all pids
     if (target_ppid != 0) {
         struct task_struct *task = (struct task_struct *)bpf_get_current_task();
@@ -38,7 +33,7 @@ int bpf_dos(struct trace_event_raw_sys_enter *ctx)
     }
 
     // Send signal. 9 == SIGKILL
-    long ret = bpf_send_signal(9);
+    ret = bpf_send_signal(9);
 
     // Log event
     struct event *e;

@@ -66,7 +66,11 @@ of the process matching this PID. This demonstrates to how affect some programs,
 ```bash
 sudo ./bpfdos
 ```
-This program raises a `SIG_KILL` signal to any program attempting to use the `bpf` syscall.
+This program raises a `SIG_KILL` signal to any program attempting to use the `ptrace` syscall, e.g. `strace`.
+Once bpf-dos starts you can test it by running:
+```bash
+strace /bin/whoami
+```
 
 
 ## Exec-Hijack
