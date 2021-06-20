@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 #include <argp.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "textreplace2.skel.h"
 #define BAD_BPF_USE_TRACE_PIPE
 #include "common_um.h"
@@ -11,6 +14,7 @@ static struct env {
     char filename[FILENAME_LEN_MAX];
     char input[FILENAME_LEN_MAX];
     char replace[FILENAME_LEN_MAX];
+    bool detatch;
     int target_ppid;
 } env;
 
@@ -36,6 +40,7 @@ static const struct argp_option opts[] = {
     { "input", 'i', "INPUT", 0, "Text to be replaced in file, max 20 chars" },
     { "replace", 'r', "REPLACE", 0, "Text to replace with in file, must be same size as -t" },
     { "target-ppid", 't', "PPID", 0, "Optional Parent PID, will only affect its children." },
+    { "detatch", 'd', NULL, 0, "Pin programs to filesystem and exit usermode process" },
     {},
 };
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
@@ -47,6 +52,9 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
             argp_usage(state);
         }
         strncpy(env.input, arg, sizeof(env.input));
+        break;
+    case 'd':
+        env.detatch = true;
         break;
     case 'r':
         if (strlen(arg) >= TEXT_LEN_MAX) {
@@ -94,9 +102,212 @@ static int handle_event(void *ctx, void *data, size_t data_sz)
     return 0;
 }
 
-static void pin_stuff(struct textreplace2_bpf *skel) {
+static const char* base_folder = "/sys/fs/bpf/textreplace";
 
-    
+int rmtree(const char *path)
+{
+    size_t path_len;
+    char *full_path;
+    DIR *dir;
+    struct stat stat_path, stat_entry;
+    struct dirent *entry;
+
+    // stat for the path
+    stat(path, &stat_path);
+
+    // if path does not exists or is not dir - exit with status -1
+    if (S_ISDIR(stat_path.st_mode) == 0) {
+        fprintf(stderr, "%s: %s\n", "Is not directory", path);
+        // ignore
+        return 0;
+    }
+
+    // if not possible to read the directory for this user
+    if ((dir = opendir(path)) == NULL) {
+        fprintf(stderr, "%s: %s\n", "Can`t open directory", path);
+        return 1;
+    }
+
+    // the length of the path
+    path_len = strlen(path);
+
+    // iteration through entries in the directory
+    while ((entry = readdir(dir)) != NULL) {
+        // skip entries "." and ".."
+        if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
+            continue;
+
+        // determinate a full path of an entry
+        full_path = calloc(path_len + strlen(entry->d_name) + 1, sizeof(char));
+        strcpy(full_path, path);
+        strcat(full_path, "/");
+        strcat(full_path, entry->d_name);
+
+        // stat for the entry
+        stat(full_path, &stat_entry);
+
+        // recursively remove a nested directory
+        if (S_ISDIR(stat_entry.st_mode) != 0) {
+            rmtree(full_path);
+            continue;
+        }
+
+        // remove a file object
+        if (unlink(full_path)) {
+            printf("Can`t remove a file: %s\n", full_path);
+            return 1;
+        }
+        free(full_path);
+    }
+
+    // remove the devastated directory and close the object of it
+    if (rmdir(path)) {
+        printf("Can`t remove a directory: %s\n", path);
+        return 1;
+    }
+
+    closedir(dir);
+    return 0;
+}
+
+
+int cleanup_pins() {
+    return rmtree(base_folder);
+}
+
+int pin_program(struct bpf_program *prog, const char* path)
+{
+    int err;
+    err = bpf_program__pin(prog, path);
+        if (err) {
+            fprintf(stdout, "could not pin prog %s: %d\n", path, err);
+            return err;
+        }
+    return err;
+}
+
+int pin_map(struct bpf_map *map, const char* path)
+{
+    int err;
+    err = bpf_map__pin(map, path);
+        if (err) {
+            fprintf(stdout, "could not pin map %s: %d\n", path, err);
+            return err;
+        }
+    return err;
+}
+
+int pin_link(struct bpf_link *link, const char* path)
+{
+    int err;
+    err = bpf_link__pin(link, path);
+        if (err) {
+            fprintf(stdout, "could not pin link %s: %d\n", path, err);
+            return err;
+        }
+    return err;
+}
+
+static int pin_stuff(struct textreplace2_bpf *skel) {
+    int err;
+    int counter = 0;
+    char pin_path[100];
+    /*
+    Maps
+        rb
+        map_fds
+        map_buff_addrs
+        map_name_addrs
+        map_to_replace_addrs
+        map_prog_array
+        map_filename
+        map_text
+    */
+    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
+    err = pin_map(skel->maps.rb, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
+    err = pin_map(skel->maps.map_fds, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
+    err = pin_map(skel->maps.map_buff_addrs, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
+    err = pin_map(skel->maps.map_name_addrs, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
+    err = pin_map(skel->maps.map_to_replace_addrs, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
+    err = pin_map(skel->maps.map_prog_array, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
+    err = pin_map(skel->maps.map_filename, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
+    err = pin_map(skel->maps.map_text, pin_path);
+    if (err) { return err; }
+
+    /*
+    Progs
+        handle_close_exit
+        handle_openat_enter
+        handle_openat_exit
+        handle_read_enter
+        find_possible_addrs
+        check_possible_addresses
+        overwrite_addresses
+    */
+    counter = 0;
+    memset(pin_path, '\x00', sizeof(pin_path));
+    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
+    err = pin_program(skel->progs.handle_close_exit, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
+    err = pin_program(skel->progs.handle_openat_enter, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
+    err = pin_program(skel->progs.handle_openat_exit, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
+    err = pin_program(skel->progs.handle_read_enter, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
+    err = pin_program(skel->progs.find_possible_addrs, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
+    err = pin_program(skel->progs.check_possible_addresses, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
+    err = pin_program(skel->progs.overwrite_addresses, pin_path);
+    if (err) { return err; }
+
+    // err = pin_link(skel->links.do_unlinkat_entry, pin_link_01);
+    counter = 0;
+    memset(pin_path, '\x00', sizeof(pin_path));
+    sprintf(pin_path, "%s/link_%02d", base_folder, counter++);
+    err = pin_link(skel->links.handle_close_exit, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/link_%02d", base_folder, counter++);
+    err = pin_link(skel->links.handle_openat_enter, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/link_%02d", base_folder, counter++);
+    err = pin_link(skel->links.handle_openat_exit, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/link_%02d", base_folder, counter++);
+    err = pin_link(skel->links.handle_read_enter, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/link_%02d", base_folder, counter++);
+    err = pin_link(skel->links.find_possible_addrs, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/link_%02d", base_folder, counter++);
+    err = pin_link(skel->links.check_possible_addresses, pin_path);
+    if (err) { return err; }
+    sprintf(pin_path, "%s/link_%02d", base_folder, counter++);
+    err = pin_link(skel->links.overwrite_addresses, pin_path);
+    if (err) { return err; }
+
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -122,6 +333,17 @@ int main(int argc, char **argv)
     // Do common setup
     if (!setup()) {
         exit(1);
+    }
+
+    if (env.detatch) {
+        // Check bpf filesystem is mounted
+        if (access("/sys/fs/bpf", F_OK) != 0) {
+            fprintf(stderr, "Make sure bpf filesystem mounted by running:\n");
+            fprintf(stderr, "    sudo mount bpffs -t bpf /sys/fs/bpf\n");
+            return 1;
+        }
+        if (cleanup_pins())
+            return 1;
     }
 
     // Open BPF application 
@@ -206,36 +428,57 @@ int main(int argc, char **argv)
     }
 
     // Attach tracepoint handler 
-    err = textreplace2_bpf__attach( skel);
+    err = textreplace2_bpf__attach(skel);
     if (err) {
         fprintf(stderr, "Failed to attach BPF program: %s\n", strerror(errno));
         goto cleanup;
     }
 
-    // Set up ring buffer
-    rb = ring_buffer__new(bpf_map__fd( skel->maps.rb), handle_event, NULL, NULL);
-    if (!rb) {
-        err = -1;
-        fprintf(stderr, "Failed to create ring buffer\n");
-        goto cleanup;
-    }
+    if (env.detatch) {
+        err = pin_stuff(skel);
+        if (err) {
+            fprintf(stderr, "Failed to pin stuff\n");
+            goto cleanup;
+        }
 
-    printf("Successfully started!\n");
-    read_trace_pipe();
-    while (!exiting) {
-        err = ring_buffer__poll(rb, 100 /* timeout, ms */);
-        /* Ctrl-C will cause -EINTR */
-        if (err == -EINTR) {
-            err = 0;
-            break;
-        }
-        if (err < 0) {
-            printf("Error polling perf buffer: %d\n", err);
-            break;
-        }
+        printf("----------------------------------\n");
+        printf("----------------------------------\n");
+        printf("Successfully started!\n");
+        printf("Please run `sudo cat /sys/kernel/debug/tracing/trace_pipe` "
+            "to see output of the BPF programs.\n");
+        printf("Files are pinned in folder %s\n", base_folder);
+        printf("To stop programs, run 'sudo rm -r%s'\n", base_folder);
+    }
+    else {
+        read_trace_pipe();
+        // // Set up ring buffer
+        // rb = ring_buffer__new(bpf_map__fd( skel->maps.rb), handle_event, NULL, NULL);
+        // if (!rb) {
+        //     err = -1;
+        //     fprintf(stderr, "Failed to create ring buffer\n");
+        //     goto cleanup;
+        // }
+
+        // printf("Successfully started!\n");
+        // read_trace_pipe();
+        // while (!exiting) {
+        //     err = ring_buffer__poll(rb, 100 /* timeout, ms */);
+        //     /* Ctrl-C will cause -EINTR */
+        //     if (err == -EINTR) {
+        //         err = 0;
+        //         break;
+        //     }
+        //     if (err < 0) {
+        //         printf("Error polling perf buffer: %d\n", err);
+        //         break;
+        //     }
+        // }
     }
 
 cleanup:
-    textreplace2_bpf__destroy( skel);
+    textreplace2_bpf__destroy(skel);
+    if (err != 0) {
+        cleanup_pins();
+    }
     return -err;
 }
