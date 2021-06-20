@@ -6,3 +6,4 @@ src/bin/hijackee
 src/bin/pidhide
 src/bin/sudoadd
 src/bin/textreplace
+src/bin/textreplace2

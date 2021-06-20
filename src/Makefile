@@ -9,7 +9,7 @@ INCLUDES := -I$(OUTPUT)
 CFLAGS := -g -Wall
 ARCH := $(shell uname -m | sed 's/x86_64/x86/')
 
-APPS = bpfdos exechijack pidhide sudoadd textreplace
+APPS = bpfdos exechijack pidhide sudoadd textreplace textreplace2
 HELPERS = hijackee
 
 # Get Clang's default includes on this system. We'll explicitly add these dirs

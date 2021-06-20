@@ -134,3 +134,12 @@ running inside a Virtual Machine or Sandbox, and not on a 'real' machine.
 
 **NOTE:** Both `input` and `replace` must be the same length, to avoid adding NULL characters to the
 middle of a block of text. To enter a newline from a bash prompt, use `$'\n'`, e.g. `--replace $'text\n'`.
+
+
+## Text-Replace2
+```bash
+bpftool
+bpftool map dump name map_text
+bpftool map lookup name map_text key hex 01 00 00 00
+bpftool map update name map_text key hex 01 00 00 00 value hex 61 61 61 61 61 61 00 00 00 00 00 00 00 00 00 00 00 00 00 00 06 00 00 00
+```
