@@ -112,6 +112,20 @@ root. Other programs such as `cat` or `sudoedit` are unnafected, so to those pro
 and the user does not have those privliges. The `#` at the end of the line ensures the rest of the line
 is trated as a comment, so it doesn't currup the file's logic.
 
+
+## Write-Blocker
+```
+sudo ./writeblocker --pid 508
+```
+This program intercepts all write syscall for a given process PID.
+Instead of passing the data to the actual write syscall, writeblocker will instead
+fake the call, returning the same number of bytes that the userspaceprogram expects
+to be written.
+
+For example, if you block the writes for the `rsyslogd` process, ssh logins will
+not be written to `/var/log/auth.log`.
+
+
 ## Text-Replace
 ```
 sudo ./textreplace --filename /path/to/file --input foo --replace bar
@@ -137,9 +151,65 @@ middle of a block of text. To enter a newline from a bash prompt, use `$'\n'`, e
 
 
 ## Text-Replace2
+This program works the same as `Text-Replace`, however it has two extra features:
+- The program's configuration is alterable at runtime using eBPF Maps.
+- The userspace loader can detach and exit
+
+### Altering Configuration
+The filename is stored in the eBPF Map `map_filename`. The Key is always `0`, and the value matches this struct:
+```c
+struct tr_file {
+    char filename[50];
+    unsigned int filename_len;
+};
+```
+That is, 50 ascii characters, then an unsigned int mathcing the length of the actual filename string.
+
+The easiest way to view and alter eBPF maps is using `bpftool`:
 ```bash
-bpftool
+# List current config
 bpftool map dump name map_text
-bpftool map lookup name map_text key hex 01 00 00 00
-bpftool map update name map_text key hex 01 00 00 00 value hex 61 61 61 61 61 61 00 00 00 00 00 00 00 00 00 00 00 00 00 00 06 00 00 00
+
+# Alter filename to be 'AAAA'
+bpftool map update name map_text \
+    key hex 00 00 00 00 \
+    value hex 61 61 61 61 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 04 00 00 00
+
+# Confirm change config
+bpftool map dump name map_text
+```
+
+To alter the text to find and replace, alter the items in the Map `map_text`. The text to find is at key `0`, and the text to replace is key `1`.
+The values will each match this struct:
+```c
+struct tr_text {
+    char text[20];
+    unsigned int text_len;
+};
+```
+
+
+### Detaching
+By running the program with `--detach`, the userspace loader can exit without stopping the eBPF Programs.
+Before running, first make sure the bpf filesystem is mounted:
+```bash
+sudo mount bpffs -t bpf /sys/fs/bpf
+```
+
+Then you can run text-replace2 detached:
+```bash
+./textreplace2 -f /proc/modules -i 'joydev' -r 'cryptd' --detach
+```
+
+This will create a number of eBPF Link files under `/sys/fs/bpf/textreplace`.
+Once loader has sucessfully run, you can check the logs by running:
+```bash
+sudo cat /sys/kernel/debug/tracing/trace_pipe
+# confirm link files are there
+sudo ls -l /sys/fs/bpf/textreplace
+```
+
+Then to stop, simply delete the link files:
+```bash
+sudo rm -r /sys/fs/bpf/textreplace
 ```

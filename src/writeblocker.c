@@ -1,36 +1,35 @@
 // SPDX-License-Identifier: BSD-3-Clause
 #include <argp.h>
 #include <unistd.h>
-#include "bpfdos.skel.h"
+#include "writeblocker.skel.h"
 #include "common_um.h"
 #include "common.h"
 
 // Setup Argument stuff
 static struct env {
-    int target_ppid;
+    int target_pid;
 } env;
 
-const char *argp_program_version = "bpfdos 1.0";
+const char *argp_program_version = "writeblocker 1.0";
 const char *argp_program_bug_address = "<path@tofile.dev>";
 const char argp_program_doc[] =
-"BPF DOS\n"
+"Write Blocker\n"
 "\n"
-"Sends a SIGKILL to any program attempting to use\n"
-"the ptrace syscall (e.g. strace)\n"
+"Fakes all write syscalls for a given Process\n"
 "\n"
-"USAGE: ./bpfdos [-t 1111]\n";
+"USAGE: ./writeblocker [-p 1111]\n";
 
 static const struct argp_option opts[] = {
-    { "target-ppid", 't', "PPID", 0, "Optional Parent PID, will only affect its children." },
+    { "pid", 'p', "PID", 0, "PID of Process to fake writes" },
     {},
 };
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
     switch (key) {
-    case 't':
+    case 'p':
         errno = 0;
-        env.target_ppid = strtol(arg, NULL, 10);
-        if (errno || env.target_ppid <= 0) {
+        env.target_pid = strtol(arg, NULL, 10);
+        if (errno || env.target_pid <= 0) {
             fprintf(stderr, "Invalid pid: %s\n", arg);
             argp_usage(state);
         }
@@ -52,17 +51,15 @@ static const struct argp argp = {
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
     const struct event *e = data;
-    if (e->success)
-        printf("Killed PID %d (%s) for trying to use ptrace syscall\n", e->pid, e->comm);
-    else
-        printf("Failed to kill PID %d (%s) for trying to use ptrace syscall\n", e->pid, e->comm);
+    // We sent the fd as the pid in the event
+    printf("Blocked Write for PID %d (%s) FD %d\n", env.target_pid, e->comm, e->pid);
     return 0;
 }
 
 int main(int argc, char **argv)
 {
     struct ring_buffer *rb = NULL;
-    struct bpfdos_bpf *skel;
+    struct writeblocker_bpf *skel;
     int err;
 
     // Parse command line arguments
@@ -75,26 +72,30 @@ int main(int argc, char **argv)
     if (!setup()) {
         exit(1);
     }
+    if (env.target_pid == 0) {
+        fprintf(stderr, "Must supply target PID (--pid)\n");
+        exit(1);
+    }
 
     // Open BPF application 
-    skel = bpfdos_bpf__open();
+    skel = writeblocker_bpf__open();
     if (!skel) {
         fprintf(stderr, "Failed to open BPF program: %s\n", strerror(errno));
         return 1;
     }
 
-    // Set target ppid
-    skel->rodata->target_ppid = env.target_ppid;
+    // Set target pid
+    skel->rodata->target_pid = env.target_pid;
 
     // Verify and load program
-    err = bpfdos_bpf__load(skel);
+    err = writeblocker_bpf__load(skel);
 	if (err) {
 		fprintf(stderr, "Failed to load and verify BPF skeleton\n");
 		goto cleanup;
 	}
 
     // Attach tracepoint handler 
-    err = bpfdos_bpf__attach( skel);
+    err = writeblocker_bpf__attach( skel);
     if (err) {
         fprintf(stderr, "Failed to attach BPF program: %s\n", strerror(errno));
         goto cleanup;
@@ -109,7 +110,7 @@ int main(int argc, char **argv)
     }
 
     printf("Successfully started!\n");
-    printf("Sending SIGKILL to any program using the bpf syscall\n");
+    printf("Blocking all writes for Process PID %d\n", env.target_pid);
     while (!exiting) {
         err = ring_buffer__poll(rb, 100 /* timeout, ms */);
         /* Ctrl-C will cause -EINTR */
@@ -124,6 +125,6 @@ int main(int argc, char **argv)
     }
 
 cleanup:
-    bpfdos_bpf__destroy( skel);
+    writeblocker_bpf__destroy( skel);
     return -err;
 }

@@ -7,3 +7,4 @@ src/bin/pidhide
 src/bin/sudoadd
 src/bin/textreplace
 src/bin/textreplace2
+src/bin/writeblocker

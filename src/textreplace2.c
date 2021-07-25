@@ -5,7 +5,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "textreplace2.skel.h"
-#define BAD_BPF_USE_TRACE_PIPE
 #include "common_um.h"
 #include "common.h"
 
@@ -27,12 +26,16 @@ const char argp_program_doc[] =
 "To pass in newlines use \%'\\n' e.g.:\n"
 "    ./textreplace2 -f /proc/modules -i ppdev -r $'aaaa\\n'"
 "\n"
-"USAGE: ./textreplace2 -f filename -i input -r output [-t 1111]\n"
+"USAGE: ./textreplace2 -f filename -i input -r output [-t 1111] [-d]\n"
 "EXAMPLES:\n"
 "Hide kernel module:\n"
 "  ./textreplace2 -f /proc/modules -i 'joydev' -r 'cryptd'\n"
 "Fake Ethernet adapter (used in sandbox detection):  \n"
 "  ./textreplace2 -f /sys/class/net/eth0/address -i '00:15:5d:01:ca:05' -r '00:00:00:00:00:00'  \n"
+"Run detached (userspace program can exit):\n"
+"  ./textreplace2 -f /proc/modules -i 'joydev' -r 'cryptd' --detach\n"
+"To stop detached program:\n"
+"  sudo rm -rf /sys/fs/bpf/textreplace\n"
 "";
 
 static const struct argp_option opts[] = {
@@ -450,29 +453,27 @@ int main(int argc, char **argv)
         printf("To stop programs, run 'sudo rm -r%s'\n", base_folder);
     }
     else {
-        read_trace_pipe();
-        // // Set up ring buffer
-        // rb = ring_buffer__new(bpf_map__fd( skel->maps.rb), handle_event, NULL, NULL);
-        // if (!rb) {
-        //     err = -1;
-        //     fprintf(stderr, "Failed to create ring buffer\n");
-        //     goto cleanup;
-        // }
+        // Set up ring buffer
+        rb = ring_buffer__new(bpf_map__fd( skel->maps.rb), handle_event, NULL, NULL);
+        if (!rb) {
+            err = -1;
+            fprintf(stderr, "Failed to create ring buffer\n");
+            goto cleanup;
+        }
 
-        // printf("Successfully started!\n");
-        // read_trace_pipe();
-        // while (!exiting) {
-        //     err = ring_buffer__poll(rb, 100 /* timeout, ms */);
-        //     /* Ctrl-C will cause -EINTR */
-        //     if (err == -EINTR) {
-        //         err = 0;
-        //         break;
-        //     }
-        //     if (err < 0) {
-        //         printf("Error polling perf buffer: %d\n", err);
-        //         break;
-        //     }
-        // }
+        printf("Successfully started!\n");
+        while (!exiting) {
+            err = ring_buffer__poll(rb, 100 /* timeout, ms */);
+            /* Ctrl-C will cause -EINTR */
+            if (err == -EINTR) {
+                err = 0;
+                break;
+            }
+            if (err < 0) {
+                printf("Error polling perf buffer: %d\n", err);
+                break;
+            }
+        }
     }
 
 cleanup:
