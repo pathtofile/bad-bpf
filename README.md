@@ -61,6 +61,9 @@ of the process matching this PID. This demonstrates to how affect some programs,
 - [Text-Replace](#Text-Replace)
     - [Kernel Module hiding](#Text-Replace)
     - [MAC Address spoofer](#Text-Replace)
+- [Text-Replace2](#Text-Replace2)
+    - [Altering Configuration](#Text-Replace2)
+    - [Running Detached](#Text-Replace2)
 
 ## BPF-Dos
 ```bash
@@ -189,7 +192,7 @@ struct tr_text {
 ```
 
 
-### Detaching
+### Running Detached
 By running the program with `--detach`, the userspace loader can exit without stopping the eBPF Programs.
 Before running, first make sure the bpf filesystem is mounted:
 ```bash
