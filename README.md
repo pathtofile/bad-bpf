@@ -9,8 +9,7 @@ read and write user data in between the usermode program and the kernel.
 
 
 # Overview
-See my blog for an overview on how these programs work and why
-this is interesting: https://blog.tofile.dev/2021/....
+See my [blog](https://blog.tofile.dev/2021/....) and my [DEF CON talk](https://defcon.org/html/defcon-29/dc-29-speakers.html#path) for an overview on how thee programs work and why this is interesting:
 
 # Build
 To use pre-build binaries, grab them from the [Releases](https://github.com/pathtofile/bad-bpf/releases) page.
