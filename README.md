@@ -58,6 +58,7 @@ of the process matching this PID. This demonstrates to how affect some programs,
 - [Exec-Hijack](#Exec-Hijack)
 - [Pid-Hide](#Pid-Hide)
 - [Sudo-Add](#Sudo-Add)
+- [Write-Blocker](#Write-Blocker)
 - [Text-Replace](#Text-Replace)
     - [Kernel Module hiding](#Text-Replace)
     - [MAC Address spoofer](#Text-Replace)
