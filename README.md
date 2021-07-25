@@ -18,6 +18,8 @@ To use pre-build binaries, grab them from the [Releases](https://github.com/path
 To build from source, do the following:
 
 ## Dependecies
+To build and run all the examples, you will need a Linux kernel version of at least [4.7](https://github.com/iovisor/bcc/blob/master/docs/kernel-versions.md).
+
 As this code makes use of CO-RE, it requires a recent version of Linux that has BTF Type information.
 See [these notes in the libbpf README](https://github.com/libbpf/libbpf/tree/master#bpf-co-re-compile-once--run-everywhere)
 for more information. For example Ubuntu requries `Ubuntu 20.10`+.
