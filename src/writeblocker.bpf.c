@@ -23,11 +23,16 @@ int BPF_PROG(fake_write, struct pt_regs *regs)
     if (pid != target_pid) {
         return 0;
     }
-    
-    // Target process
-    // Log event and overwrite return
+
+    // Target PID, check FD so we don't block
+    // stdin, stdout, or stderr
     u32 fd = PT_REGS_PARM1(regs);
     u32 count = PT_REGS_PARM3(regs);
+    if (fd <= 2) {
+        return 0;
+    }
+
+    // Log event and overwrite return
     struct event *e;
     bpf_printk("Faking write for pid=%d; fd=%d; count=%d\n", target_pid, fd, count);
     e = bpf_ringbuf_reserve(&rb, sizeof(*e), 0);

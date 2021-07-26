@@ -9,7 +9,11 @@ read and write user data in between the usermode program and the kernel.
 
 
 # Overview
-See my [blog](https://blog.tofile.dev/2021/....) and my [DEF CON talk](https://defcon.org/html/defcon-29/dc-29-speakers.html#path) for an overview on how thee programs work and why this is interesting:
+See my [blog](https://blog.tofile.dev/2021/....) and my [DEF CON talk](https://defcon.org/html/defcon-29/dc-29-speakers.html#path) for an overview on how thee programs work and why this is interesting.
+
+Examples have been tested on:
+- Ubuntu 20.10
+- Fedora 34
 
 # Build
 To use pre-build binaries, grab them from the [Releases](https://github.com/pathtofile/bad-bpf/releases) page.
@@ -27,12 +31,20 @@ To build it requires these dependecies:
 - zlib
 - libelf
 - libbfd
-- clang 11
+- clang **11**
 - make
 
 On Ubuntu these can be installed by
 ```bash
 sudo apt install build-essential clang-11 libelf-dev zlib1g-dev libbfd-dev libcap-dev libfd-dev
+```
+
+**NOTE:** Some examples fail to build on Clang 12. To install specifically clang 11 on Fedora 34+ you have to run:
+```bash
+# First install clang 12
+sudo dnf install clang
+# Then downgrade to Clag 11, which was in Fedora 33
+sudo dnf downgrade --releasever=33 clang
 ```
 
 ## Build
@@ -127,6 +139,8 @@ Instead of passing the data to the actual write syscall, writeblocker will inste
 fake the call, returning the same number of bytes that the userspaceprogram expects
 to be written.
 
+Only File Descriptors > 2 will be blocked, so stdin, stdout, and stderror still work.
+
 For example, if you block the writes for the `rsyslogd` process, ssh logins will
 not be written to `/var/log/auth.log`.
 
@@ -173,15 +187,31 @@ That is, 50 ascii characters, then an unsigned int mathcing the length of the ac
 The easiest way to view and alter eBPF maps is using `bpftool`:
 ```bash
 # List current config
-bpftool map dump name map_text
+$> bpftool map dump name map_filename
+[{
+        "key": 0,
+        "value": {
+            "filename": "/proc/modules",
+            "filename_len": 13
+        }
+    }
+]
 
 # Alter filename to be 'AAAA'
-bpftool map update name map_text \
+$> bpftool map update name map_filename \
     key hex 00 00 00 00 \
-    value hex 61 61 61 61 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 04 00 00 00
+    value hex 61 61 61 61 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 04 00 00 00
 
 # Confirm change config
-bpftool map dump name map_text
+$> bpftool map dump name map_filename
+[{
+        "key": 0,
+        "value": {
+            "filename": "aaaa",
+            "filename_len": 4
+        }
+    }
+]
 ```
 
 To alter the text to find and replace, alter the items in the Map `map_text`. The text to find is at key `0`, and the text to replace is key `1`.

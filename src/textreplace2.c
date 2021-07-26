@@ -120,7 +120,6 @@ int rmtree(const char *path)
 
     // if path does not exists or is not dir - exit with status -1
     if (S_ISDIR(stat_path.st_mode) == 0) {
-        fprintf(stderr, "%s: %s\n", "Is not directory", path);
         // ignore
         return 0;
     }
@@ -212,80 +211,34 @@ int pin_link(struct bpf_link *link, const char* path)
 }
 
 static int pin_stuff(struct textreplace2_bpf *skel) {
+    /*
+    Sorry in advance for not this function being quite garbage,
+    but I tried to keep the code simple to make it easy to read
+    and modify
+    */
     int err;
     int counter = 0;
+    struct bpf_program *prog;
+    struct bpf_map *map;
     char pin_path[100];
-    /*
-    Maps
-        rb
-        map_fds
-        map_buff_addrs
-        map_name_addrs
-        map_to_replace_addrs
-        map_prog_array
-        map_filename
-        map_text
-    */
-    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
-    err = pin_map(skel->maps.rb, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
-    err = pin_map(skel->maps.map_fds, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
-    err = pin_map(skel->maps.map_buff_addrs, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
-    err = pin_map(skel->maps.map_name_addrs, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
-    err = pin_map(skel->maps.map_to_replace_addrs, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
-    err = pin_map(skel->maps.map_prog_array, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
-    err = pin_map(skel->maps.map_filename, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
-    err = pin_map(skel->maps.map_text, pin_path);
-    if (err) { return err; }
 
-    /*
-    Progs
-        handle_close_exit
-        handle_openat_enter
-        handle_openat_exit
-        handle_read_enter
-        find_possible_addrs
-        check_possible_addresses
-        overwrite_addresses
-    */
+    // Pin Maps
+    bpf_object__for_each_map(map, skel->obj) {
+        sprintf(pin_path, "%s/map_%02d", base_folder, counter++);
+        err = pin_map(map, pin_path);
+        if (err) { return err; }
+    }
+
+    // Pin Programs
     counter = 0;
-    memset(pin_path, '\x00', sizeof(pin_path));
-    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
-    err = pin_program(skel->progs.handle_close_exit, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
-    err = pin_program(skel->progs.handle_openat_enter, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
-    err = pin_program(skel->progs.handle_openat_exit, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
-    err = pin_program(skel->progs.handle_read_enter, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
-    err = pin_program(skel->progs.find_possible_addrs, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
-    err = pin_program(skel->progs.check_possible_addresses, pin_path);
-    if (err) { return err; }
-    sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
-    err = pin_program(skel->progs.overwrite_addresses, pin_path);
-    if (err) { return err; }
+    bpf_object__for_each_program(prog, skel->obj) {
+        sprintf(pin_path, "%s/prog_%02d", base_folder, counter++);
+        err = pin_program(prog, pin_path);
+        if (err) { return err; }
+    }
 
-    // err = pin_link(skel->links.do_unlinkat_entry, pin_link_01);
+    // Pin Links. There's not for_each for links
+    // so do it manually in a gross way
     counter = 0;
     memset(pin_path, '\x00', sizeof(pin_path));
     sprintf(pin_path, "%s/link_%02d", base_folder, counter++);
