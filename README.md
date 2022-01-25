@@ -36,7 +36,7 @@ To build it requires these dependecies:
 
 On Ubuntu these can be installed by
 ```bash
-sudo apt install build-essential clang-11 libelf-dev zlib1g-dev libbfd-dev libcap-dev libfd-dev
+sudo apt install build-essential clang-11 libelf-dev zlib1g-dev libbfd-dev libcap-dev linux-tools-common linux-tools-generic
 ```
 
 **NOTE:** Some examples fail to build on Clang 12. To install specifically clang 11 on Fedora 34+ you have to run:
@@ -50,11 +50,17 @@ sudo dnf downgrade --releasever=33 clang
 ## Build
 To Build from source, recusivly clone the respository the run `make` in the `src` directory to build:
 ```bash
-git clone --recusrive https://github.com/pathtofile/bad-bpf.git
+# --recursive is needed to also get the libbpf source
+git clone --recursive https://github.com/pathtofile/bad-bpf.git
 cd bad-bpf/src
 make
 ```
-The binaries will built into `bad-bpf/src/bin`.
+The binaries will built into `bad-bpf/src/bin`. If you encounter issues with related to `vmlinux.h`,
+try remaking the file for your specific kernel and distribution:
+```bash
+cd bad-bpf/tools
+./bpftool btf dump file /sys/kernel/btf/vmlinux format c > ../src/vmlinux.h
+```
 
 # Run
 To run, launch each program as `root`. Every program has a `--help` option
