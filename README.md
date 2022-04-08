@@ -9,7 +9,7 @@ read and write user data in between the usermode program and the kernel.
 
 
 # Overview
-See my [blog](https://blog.tofile.dev/2021/....) and my [DEF CON talk](https://defcon.org/html/defcon-29/dc-29-speakers.html#path) for an overview on how thee programs work and why this is interesting.
+See my [blog](https://blog.tofile.dev/2021/08/01/bad-bpf.html) and my [DEF CON talk](https://defcon.org/html/defcon-29/dc-29-speakers.html#path) for an overview on how thee programs work and why this is interesting.
 
 Examples have been tested on:
 - Ubuntu 20.10
@@ -73,17 +73,23 @@ This option restricts the programs' operation to only programs that are children
 of the process matching this PID. This demonstrates to how affect some programs, but not others.
 
 
-- [BPF-DOS](#BPF-Dos)
-- [Exec-Hijack](#Exec-Hijack)
-- [Pid-Hide](#Pid-Hide)
-- [Sudo-Add](#Sudo-Add)
-- [Write-Blocker](#Write-Blocker)
-- [Text-Replace](#Text-Replace)
-    - [Kernel Module hiding](#Text-Replace)
-    - [MAC Address spoofer](#Text-Replace)
-- [Text-Replace2](#Text-Replace2)
-    - [Altering Configuration](#Text-Replace2)
-    - [Running Detached](#Text-Replace2)
+- [Bad BPF](#bad-bpf)
+- [Overview](#overview)
+- [Build](#build)
+  - [Dependecies](#dependecies)
+  - [Build](#build-1)
+- [Run](#run)
+- [Programs](#programs)
+  - [Common Arguments](#common-arguments)
+  - [BPF-Dos](#bpf-dos)
+  - [Exec-Hijack](#exec-hijack)
+  - [Pid-Hide](#pid-hide)
+  - [Sudo-Add](#sudo-add)
+  - [Write-Blocker](#write-blocker)
+  - [Text-Replace](#text-replace)
+  - [Text-Replace2](#text-replace2)
+    - [Altering Configuration](#altering-configuration)
+    - [Running Detached](#running-detached)
 
 ## BPF-Dos
 ```bash
