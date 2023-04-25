@@ -10,8 +10,8 @@
 #define text_len_max 20
 static struct env {
     char filename[filename_len_max];
-    char input[filename_len_max];
-    char replace[filename_len_max];
+    char input[text_len_max];
+    char replace[text_len_max];
     int target_ppid;
 } env;
 
@@ -44,14 +44,14 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
     switch (key) {
     case 'i':
         if (strlen(arg) >= text_len_max) {
-            fprintf(stderr, "Text must be less than %d characters\n", filename_len_max);
+            fprintf(stderr, "Text must be less than %d characters\n", text_len_max);
             argp_usage(state);
         }
         strncpy(env.input, arg, sizeof(env.input));
         break;
     case 'r':
         if (strlen(arg) >= text_len_max) {
-            fprintf(stderr, "Text must be less than %d characters\n", filename_len_max);
+            fprintf(stderr, "Text must be less than %d characters\n", text_len_max);
             argp_usage(state);
         }
         strncpy(env.replace, arg, sizeof(env.replace));

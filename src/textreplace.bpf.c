@@ -65,8 +65,8 @@ const volatile char filename[filename_len_max];
 // These store the text to find and replace in the file
 const unsigned int text_len_max = 20;
 const volatile  unsigned int text_len = 0;
-const volatile char text_find[filename_len_max];
-const volatile char text_replace[filename_len_max];
+const volatile char text_find[text_len_max];
+const volatile char text_replace[text_len_max];
 
 SEC("tp/syscalls/sys_exit_close")
 int handle_close_exit(struct trace_event_raw_sys_exit *ctx)
