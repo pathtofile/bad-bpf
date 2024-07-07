@@ -6,12 +6,10 @@
 #include "common.h"
 
 // Setup Argument stuff
-#define filename_len_max 50
-#define text_len_max 20
 static struct env {
-    char filename[filename_len_max];
-    char input[filename_len_max];
-    char replace[filename_len_max];
+    char filename[FILENAME_LEN_MAX];
+    char input[TEXT_LEN_MAX];
+    char replace[TEXT_LEN_MAX];
     int target_ppid;
 } env;
 
@@ -43,22 +41,22 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
     switch (key) {
     case 'i':
-        if (strlen(arg) >= text_len_max) {
-            fprintf(stderr, "Text must be less than %d characters\n", filename_len_max);
+        if (strlen(arg) >= TEXT_LEN_MAX) {
+            fprintf(stderr, "Text must be less than %d characters\n", TEXT_LEN_MAX);
             argp_usage(state);
         }
         strncpy(env.input, arg, sizeof(env.input));
         break;
     case 'r':
-        if (strlen(arg) >= text_len_max) {
-            fprintf(stderr, "Text must be less than %d characters\n", filename_len_max);
+        if (strlen(arg) >= TEXT_LEN_MAX) {
+            fprintf(stderr, "Text must be less than %d characters\n", TEXT_LEN_MAX);
             argp_usage(state);
         }
         strncpy(env.replace, arg, sizeof(env.replace));
         break;
     case 'f':
-        if (strlen(arg) >= filename_len_max) {
-            fprintf(stderr, "Filename must be less than %d characters\n", filename_len_max);
+        if (strlen(arg) >= FILENAME_LEN_MAX) {
+            fprintf(stderr, "Filename must be less than %d characters\n", FILENAME_LEN_MAX);
             argp_usage(state);
         }
         strncpy(env.filename, arg, sizeof(env.filename));

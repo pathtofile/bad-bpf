@@ -12,6 +12,10 @@
 // Used when replacing text
 #define FILENAME_LEN_MAX 50
 #define TEXT_LEN_MAX 20
+#define LOCAL_BUFF_SIZE 64
+// NOTE: This should probably be a map-of-maps, with the top-level
+// key bing pid_tgid, so we know we're looking at the right program
+#define MAX_POSSIBLE_ADDRS 300
 
 // Simple message structure to get events from eBPF Programs
 // in the kernel to user spcae

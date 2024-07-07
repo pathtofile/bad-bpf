@@ -30,9 +30,6 @@ struct {
 } map_buff_addrs SEC(".maps");
 
 // Map to fold the buffer sized from 'read' calls
-// NOTE: This should probably be a map-of-maps, with the top-level
-// key bing pid_tgid, so we know we're looking at the right program
-#define MAX_POSSIBLE_ADDRS 500
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, MAX_POSSIBLE_ADDRS);
@@ -201,13 +198,11 @@ int BPF_PROG(find_possible_addrs, struct pt_regs *regs, long ret)
     long int read_size = buff_size;
 
     // bpf_printk("[TEXT_REPLACE] PID %d | read_size %lu | buff_addr 0x%lx\n", pid, read_size, buff_addr);
-    const unsigned int local_buff_size = 64;
-    const unsigned int loop_size = 64;
-    char local_buff[local_buff_size] = { 0x00 };
+    char local_buff[LOCAL_BUFF_SIZE] = { 0x00 };
 
-    if (read_size > (local_buff_size+1)) {
+    if (read_size > (LOCAL_BUFF_SIZE+1)) {
         // Need to loop :-(
-        read_size = local_buff_size;
+        read_size = LOCAL_BUFF_SIZE;
     }
 
     int index = PROG_00;
@@ -221,10 +216,10 @@ int BPF_PROG(find_possible_addrs, struct pt_regs *regs, long ret)
     // This is all very convoluted, but is required to keep
     // the program complexity and size low enough the pass the verifier checks
     unsigned int tofind_counter = 0;
-    for (unsigned int i = 0; i < loop_size; i++) {
+    for (unsigned int i = 0; i < LOCAL_BUFF_SIZE; i++) {
         // Read in chunks from buffer
         bpf_probe_read(&local_buff, read_size, (void*)buff_addr);
-        for (unsigned int j = 0; j < local_buff_size; j++) {
+        for (unsigned int j = 0; j < LOCAL_BUFF_SIZE; j++) {
             // Look for the first char of our 'to find' text
             if (local_buff[j] == pFind->text[0]) {
                 name_addr = buff_addr+j;
@@ -235,7 +230,7 @@ int BPF_PROG(find_possible_addrs, struct pt_regs *regs, long ret)
             }
         }
 
-        buff_addr += local_buff_size;
+        buff_addr += LOCAL_BUFF_SIZE;
     }
 
     // Tail-call into 'check_possible_addrs' to loop over possible addresses

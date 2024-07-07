@@ -9,11 +9,10 @@ read and write user data in between the usermode program and the kernel.
 
 
 # Overview
-See my [blog](https://blog.tofile.dev/2021/....) and my [DEF CON talk](https://defcon.org/html/defcon-29/dc-29-speakers.html#path) for an overview on how thee programs work and why this is interesting.
+See my [blog](https://blog.tofile.dev/2021/08/01/bad-bpf.html) and my [DEF CON talk](https://defcon.org/html/defcon-29/dc-29-speakers.html#path) for an overview on how thee programs work and why this is interesting.
 
 Examples have been tested on:
-- Ubuntu 20.10
-- Fedora 34
+- Ubuntu 22.04
 
 # Build
 To use pre-build binaries, grab them from the [Releases](https://github.com/pathtofile/bad-bpf/releases) page.
@@ -31,20 +30,12 @@ To build it requires these dependecies:
 - zlib
 - libelf
 - libbfd
-- clang **11**
+- clang and llvm **14**
 - make
 
 On Ubuntu these can be installed by
 ```bash
-sudo apt install build-essential clang-11 libelf-dev zlib1g-dev libbfd-dev libcap-dev linux-tools-common linux-tools-generic
-```
-
-**NOTE:** Some examples fail to build on Clang 12. To install specifically clang 11 on Fedora 34+ you have to run:
-```bash
-# First install clang 12
-sudo dnf install clang
-# Then downgrade to Clag 11, which was in Fedora 33
-sudo dnf downgrade --releasever=33 clang
+sudo apt install build-essential clang-14 llvm-14 libelf1 libelf-dev zlib1g-dev libbfd-dev libcap-dev linux-tools-common linux-tools-generic
 ```
 
 ## Build
@@ -55,11 +46,11 @@ git clone --recursive https://github.com/pathtofile/bad-bpf.git
 cd bad-bpf/src
 make
 ```
-The binaries will built into `bad-bpf/src/bin`. If you encounter issues with related to `vmlinux.h`,
+The binaries will built into `bad-bpf/src/`. If you encounter issues with related to `vmlinux.h`,
 try remaking the file for your specific kernel and distribution:
 ```bash
 cd bad-bpf/tools
-./bpftool btf dump file /sys/kernel/btf/vmlinux format c > ../src/vmlinux.h
+./bpftool btf dump file /sys/kernel/btf/vmlinux format c > ../vmlinux/<arch>/vmlinux.h
 ```
 
 # Run
@@ -73,17 +64,23 @@ This option restricts the programs' operation to only programs that are children
 of the process matching this PID. This demonstrates to how affect some programs, but not others.
 
 
-- [BPF-DOS](#BPF-Dos)
-- [Exec-Hijack](#Exec-Hijack)
-- [Pid-Hide](#Pid-Hide)
-- [Sudo-Add](#Sudo-Add)
-- [Write-Blocker](#Write-Blocker)
-- [Text-Replace](#Text-Replace)
-    - [Kernel Module hiding](#Text-Replace)
-    - [MAC Address spoofer](#Text-Replace)
-- [Text-Replace2](#Text-Replace2)
-    - [Altering Configuration](#Text-Replace2)
-    - [Running Detached](#Text-Replace2)
+- [Bad BPF](#bad-bpf)
+- [Overview](#overview)
+- [Build](#build)
+  - [Dependecies](#dependecies)
+  - [Build](#build-1)
+- [Run](#run)
+- [Programs](#programs)
+  - [Common Arguments](#common-arguments)
+  - [BPF-Dos](#bpf-dos)
+  - [Exec-Hijack](#exec-hijack)
+  - [Pid-Hide](#pid-hide)
+  - [Sudo-Add](#sudo-add)
+  - [Write-Blocker](#write-blocker)
+  - [Text-Replace](#text-replace)
+  - [Text-Replace2](#text-replace2)
+    - [Altering Configuration](#altering-configuration)
+    - [Running Detached](#running-detached)
 
 ## BPF-Dos
 ```bash
@@ -105,11 +102,11 @@ This program intercepts all `execve` calls (used to create new processes) and in
 `bad-bpf` builds a simple program `hijackee` that simply prints out the `uid` and `argv[0]`, so you can use that:
 ```bash
 make
-sudo cp ./bin/hijackee /a
+sudo cp ./hijackee /a
 sudo chmod ugo+rx /a
 ```
 
-Then just run `sudo ./bin/exechijack`.
+Then just run `sudo ./exechijack`.
 
 
 ## Pid-Hide

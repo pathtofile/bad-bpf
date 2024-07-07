@@ -9,18 +9,18 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Dependecies
-        run: sudo apt install -y build-essential clang-11 libelf-dev zlib1g-dev libbfd-dev libcap-dev
+        run: sudo apt install -y build-essential clang-14 llvm-14 libelf1 libelf-dev zlib1g-dev libbfd-dev libcap-dev
 
       - name: Fix llvm-strip
-        run: sudo ln -s "$(which llvm-strip-11)" "$(dirname $(which llvm-strip-11))/llvm-strip"
+        run: sudo ln -s "$(which llvm-strip-14)" "$(dirname $(which llvm-strip-14))/llvm-strip"
 
       - name: Build
         run: cd src && make

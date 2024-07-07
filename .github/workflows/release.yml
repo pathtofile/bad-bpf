@@ -8,24 +8,24 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
       - name: Install Dependecies
-        run: sudo apt install -y build-essential clang-11 libelf-dev zlib1g-dev libbfd-dev libcap-dev
+        run: sudo apt install -y build-essential clang-14 libelf1 libelf-dev zlib1g-dev libbfd-dev libcap-dev
 
       - name: Fix llvm-strip
-        run: sudo ln -s "$(which llvm-strip-11)" "$(dirname $(which llvm-strip-11))/llvm-strip"
+        run: sudo ln -s "$(which llvm-strip-14)" "$(dirname $(which llvm-strip-14))/llvm-strip"
 
       - name: Build
         run: cd src && make
 
       - name: Create Archive
-        run: cd src/bin && zip bad-bpf.zip *
+        run: cd src && zip bad-bpf.zip bpfdos exechijack pidhide sudoadd textreplace textreplace2 writeblocker hijackee
 
       - name: Create Release
         id: create_release
@@ -44,6 +44,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./src/bin/bad-bpf.zip
+          asset_path: ./src/bad-bpf.zip
           asset_name: bad-bpf.zip
           asset_content_type: application/octet-stream

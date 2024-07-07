@@ -1,13 +1,28 @@
 # SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
 OUTPUT := .output
-CLANG ?= clang-11
-LLVM_STRIP ?= llvm-strip-11
-BPFTOOL ?= $(abspath ../tools/bpftool)
+CLANG ?= clang
 LIBBPF_SRC := $(abspath ../libbpf/src)
+BPFTOOL_SRC := $(abspath ../bpftool/src)
 LIBBPF_OBJ := $(abspath $(OUTPUT)/libbpf.a)
-INCLUDES := -I$(OUTPUT)
+BPFTOOL_OUTPUT ?= $(abspath $(OUTPUT)/bpftool)
+BPFTOOL ?= $(BPFTOOL_OUTPUT)/bootstrap/bpftool
+LIBBLAZESYM_SRC := $(abspath ../blazesym/)
+LIBBLAZESYM_INC := $(abspath $(LIBBLAZESYM_SRC)/capi/include)
+LIBBLAZESYM_OBJ := $(abspath $(OUTPUT)/libblazesym_c.a)
+ARCH ?= $(shell uname -m | sed 's/x86_64/x86/' \
+			 | sed 's/arm.*/arm/' \
+			 | sed 's/aarch64/arm64/' \
+			 | sed 's/ppc64le/powerpc/' \
+			 | sed 's/mips.*/mips/' \
+			 | sed 's/riscv64/riscv/' \
+			 | sed 's/loongarch64/loongarch/')
+VMLINUX := ../vmlinux/$(ARCH)/vmlinux.h
+# Use our own libbpf API headers and Linux UAPI headers distributed with
+# libbpf to avoid dependency on system-wide headers, which could be missing or
+# outdated
+INCLUDES := -I$(OUTPUT) -I../libbpf/include/uapi -I$(dir $(VMLINUX)) -I$(LIBBLAZESYM_INC)
 CFLAGS := -g -Wall
-ARCH := $(shell uname -m | sed 's/x86_64/x86/')
+ALL_LDFLAGS := $(LDFLAGS) $(EXTRA_LDFLAGS)
 
 APPS = bpfdos exechijack pidhide sudoadd textreplace textreplace2 writeblocker
 HELPERS = hijackee
@@ -20,7 +35,7 @@ HELPERS = hijackee
 #
 # Use '-idirafter': Don't interfere with include mechanics except where the
 # build would have failed anyways.
-CLANG_BPF_SYS_INCLUDES = $(shell $(CLANG) -v -E - </dev/null 2>&1 \
+CLANG_BPF_SYS_INCLUDES ?= $(shell $(CLANG) -v -E - </dev/null 2>&1 \
 	| sed -n '/<...> search starts here:/,/End of search list./{ s| \(/.*\)|-idirafter \1|p }')
 
 ifeq ($(V),1)
@@ -35,16 +50,24 @@ else
 	MAKEFLAGS += --no-print-directory
 endif
 
+define allow-override
+  $(if $(or $(findstring environment,$(origin $(1))),\
+            $(findstring command line,$(origin $(1)))),,\
+    $(eval $(1) = $(2)))
+endef
+
+$(call allow-override,CC,$(CROSS_COMPILE)cc)
+$(call allow-override,LD,$(CROSS_COMPILE)ld)
+
 .PHONY: all
 all: $(APPS) $(HELPERS)
 
 .PHONY: clean
 clean:
 	$(call msg,CLEAN)
-	$(Q)rm -rf $(OUTPUT) $(APPS)
-	$(Q)cd bin && rm -f $(APPS) $(HELPERS)
+	$(Q)rm -rf $(OUTPUT) $(APPS) $(HELPERS)
 
-$(OUTPUT) $(OUTPUT)/libbpf:
+$(OUTPUT) $(OUTPUT)/libbpf $(BPFTOOL_OUTPUT):
 	$(call msg,MKDIR,$@)
 	$(Q)mkdir -p $@
 
@@ -56,19 +79,26 @@ $(LIBBPF_OBJ): $(wildcard $(LIBBPF_SRC)/*.[ch] $(LIBBPF_SRC)/Makefile) | $(OUTPU
 		    INCLUDEDIR= LIBDIR= UAPIDIR=			      \
 		    install
 
+# Build bpftool
+$(BPFTOOL): | $(BPFTOOL_OUTPUT)
+	$(call msg,BPFTOOL,$@)
+	$(Q)$(MAKE) ARCH= CROSS_COMPILE= OUTPUT=$(BPFTOOL_OUTPUT)/ -C $(BPFTOOL_SRC) bootstrap
+
 # Build BPF code
-$(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) vmlinux.h | $(OUTPUT)
+$(OUTPUT)/%.bpf.o: %.bpf.c $(LIBBPF_OBJ) $(wildcard %.h) $(VMLINUX) | $(OUTPUT) $(BPFTOOL)
 	$(call msg,BPF,$@)
-	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES) -c $(filter %.c,$^) -o $@
-	$(Q)$(LLVM_STRIP) -g $@ # strip useless DWARF info
+	$(Q)$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH)		      \
+		     $(INCLUDES) $(CLANG_BPF_SYS_INCLUDES)		      \
+		     -c $(filter %.c,$^) -o $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
+	$(Q)$(BPFTOOL) gen object $@ $(patsubst %.bpf.o,%.tmp.bpf.o,$@)
 
 # Generate BPF skeletons
-$(OUTPUT)/%.skel.h: $(OUTPUT)/%.bpf.o | $(OUTPUT)
+$(OUTPUT)/%.skel.h: $(OUTPUT)/%.bpf.o | $(OUTPUT) $(BPFTOOL)
 	$(call msg,GEN-SKEL,$@)
 	$(Q)$(BPFTOOL) gen skeleton $< > $@
 
 # Build user-space code
-$(patsubst %,$(OUTPUT)/%.o,$(APPS)): %.o: %.skel.h common.h common_um.h
+$(patsubst %,$(OUTPUT)/%.o,$(APPS)): %.o: %.skel.h
 
 $(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
 	$(call msg,CC,$@)
@@ -77,16 +107,15 @@ $(OUTPUT)/%.o: %.c $(wildcard %.h) | $(OUTPUT)
 # Build application binary
 $(APPS): %: $(OUTPUT)/%.o $(LIBBPF_OBJ) | $(OUTPUT)
 	$(call msg,BINARY,$@)
-	$(Q)$(CC) $(CFLAGS) $^ -lelf -lz -o bin/$@
+	$(Q)$(CC) $(CFLAGS) $^ $(ALL_LDFLAGS) -lelf -lz -o $@
 
 # Build helpers
 $(HELPERS):
 	$(call msg,BINARY,$@)
-	$(Q)$(CC) $(CFLAGS) $@.c -o bin/$@
+	$(Q)$(CC) $(CFLAGS) $@.c -o $@
 
 # delete failed targets
 .DELETE_ON_ERROR:
 
 # keep intermediate (.skel.h, .bpf.o, etc) targets
 .SECONDARY:
-

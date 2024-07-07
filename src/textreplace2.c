@@ -11,8 +11,8 @@
 // Setup Argument stuff
 static struct env {
     char filename[FILENAME_LEN_MAX];
-    char input[FILENAME_LEN_MAX];
-    char replace[FILENAME_LEN_MAX];
+    char input[TEXT_LEN_MAX];
+    char replace[TEXT_LEN_MAX];
     bool detatch;
     int target_ppid;
 } env;
@@ -51,7 +51,7 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
     switch (key) {
     case 'i':
         if (strlen(arg) >= TEXT_LEN_MAX) {
-            fprintf(stderr, "Text must be less than %d characters\n", FILENAME_LEN_MAX);
+            fprintf(stderr, "Text must be less than %d characters\n", TEXT_LEN_MAX);
             argp_usage(state);
         }
         strncpy(env.input, arg, sizeof(env.input));
@@ -61,7 +61,7 @@ static error_t parse_arg(int key, char *arg, struct argp_state *state)
         break;
     case 'r':
         if (strlen(arg) >= TEXT_LEN_MAX) {
-            fprintf(stderr, "Text must be less than %d characters\n", FILENAME_LEN_MAX);
+            fprintf(stderr, "Text must be less than %d characters\n", TEXT_LEN_MAX);
             argp_usage(state);
         }
         strncpy(env.replace, arg, sizeof(env.replace));

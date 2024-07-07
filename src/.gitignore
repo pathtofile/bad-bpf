@@ -1,0 +1,11 @@
+/.output
+/cmake-build-debug/
+/cmake-build-release/
+/bpfdos
+/exechijack
+/pidhide
+/sudoadd
+/textreplace
+/textreplace2
+/writeblocker
+/hijackee
